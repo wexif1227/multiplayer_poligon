@@ -10,6 +10,7 @@ const clean = (s, max = 18) => String(s || '').replace(/[<>\u0000-\u001f]/g, '')
 const publicPlayer = p => ({ id:p.id, name:p.name, x:p.x, y:p.y, z:p.z, yaw:p.yaw, pitch:p.pitch, weapon:p.weapon, hp:p.hp, kills:p.kills, deaths:p.deaths });
 const send = (ws, obj) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); };
 function roomPlayers(room) { return [...room.players.values()].map(publicPlayer); }
+function roomInfo(room) { return { mode:room.mode || 'training', map:room.map || 'dust' }; }
 function broadcast(room, obj, except = null) { for (const p of room.players.values()) if (p.ws !== except) send(p.ws, obj); }
 function announceRoster(room) { broadcast(room, { type:'players', players:roomPlayers(room) }); }
 function leave(ws) {
@@ -35,12 +36,12 @@ wss.on('connection', ws => {
     if (m.type === 'join') {
       if (p) return;
       const roomCode = clean(m.room, 12).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,12) || 'KENTY';
-      let room = rooms.get(roomCode); if (!room) { room = { players:new Map() }; rooms.set(roomCode, room); }
+      let room = rooms.get(roomCode); if (!room) { room = { players:new Map(), mode:'training', map:'dust' }; rooms.set(roomCode, room); }
       if (room.players.size >= MAX_PLAYERS) { send(ws,{type:'error',message:'Комната заполнена (максимум 6 игроков).'}); ws.close(1008,'room full'); return; }
       const id = crypto.randomUUID();
       p = { id, ws, room:roomCode, name:clean(m.name), x:(Math.random()-.5)*12, y:1.6, z:(Math.random()-.5)*12, yaw:0, pitch:0, weapon:'', hp:100, kills:0, deaths:0, lastState:0 };
       room.players.set(id,p); clients.set(ws,p);
-      send(ws,{type:'welcome',id,room:roomCode,players:roomPlayers(room)});
+      send(ws,{type:'welcome',id,room:roomCode,players:roomPlayers(room),...roomInfo(room)});
       announceRoster(room); return;
     }
     if (!p) { send(ws,{type:'error',message:'Сначала войди в комнату.'}); return; }
@@ -51,6 +52,14 @@ wss.on('connection', ws => {
       p.x=Math.max(-19.4,Math.min(19.4,num(m.x,p.x))); p.y=Math.max(0,Math.min(12,num(m.y,p.y))); p.z=Math.max(-19.4,Math.min(19.4,num(m.z,p.z)));
       p.yaw=num(m.yaw,p.yaw); p.pitch=num(m.pitch,p.pitch); p.weapon=clean(m.weapon,24);
       broadcast(room,{type:'state',id:p.id,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:p.pitch,weapon:p.weapon,hp:p.hp},ws); return;
+    }
+    if (m.type === 'mode') {
+      const mode=String(m.mode||''); if(!['training','rampage','pigmode'].includes(mode))return;
+      room.mode=mode; broadcast(room,{type:'mode',mode,by:p.id}); return;
+    }
+    if (m.type === 'map') {
+      const map=String(m.map||''); if(!['dust','mirage','standoff'].includes(map))return;
+      room.map=map; broadcast(room,{type:'map',map,by:p.id}); return;
     }
     if (m.type === 'shot') { broadcast(room,{type:'shot',id:p.id,weapon:clean(m.weapon,24)},ws); return; }
     if (m.type === 'hit') {
