@@ -4,6 +4,9 @@ const crypto = require('crypto');
 const WebSocket = require('ws');
 const PORT = Number(process.env.PORT || 3000);
 const MAX_PLAYERS = 6;
+const SPAWN_SHIELD_MS = 3000;
+const SPAWN_POINTS = [[-16,1.6,-22],[16,1.6,-22],[-18,1.6,20],[18,1.6,20],[0,1.6,24]];
+const randomSpawn = () => { const s=SPAWN_POINTS[Math.floor(Math.random()*SPAWN_POINTS.length)]; return {x:s[0]+(Math.random()-.5)*1.8,y:s[1],z:s[2]+(Math.random()-.5)*1.8}; };
 const rooms = new Map();
 const clients = new Map();
 const clean = (s, max = 18) => String(s || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, max) || 'Игрок';
@@ -38,8 +41,8 @@ wss.on('connection', ws => {
       const roomCode = clean(m.room, 12).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,12) || 'KENTY';
       let room = rooms.get(roomCode); if (!room) { room = { players:new Map(), mode:'training', map:'dust' }; rooms.set(roomCode, room); }
       if (room.players.size >= MAX_PLAYERS) { send(ws,{type:'error',message:'Комната заполнена (максимум 6 игроков).'}); ws.close(1008,'room full'); return; }
-      const id = crypto.randomUUID();
-      p = { id, ws, room:roomCode, name:clean(m.name), x:(Math.random()-.5)*12, y:1.6, z:(Math.random()-.5)*12, yaw:0, pitch:0, weapon:'', hp:100, godMode:false, kills:0, deaths:0, lastState:0 };
+      const id = crypto.randomUUID(); const spawn=randomSpawn();
+      p = { id, ws, room:roomCode, name:clean(m.name), ...spawn, yaw:0, pitch:0, weapon:'', hp:100, godMode:false, kills:0, deaths:0, lastState:0, spawnShieldUntil:Date.now()+SPAWN_SHIELD_MS };
       room.players.set(id,p); clients.set(ws,p);
       send(ws,{type:'welcome',id,room:roomCode,players:roomPlayers(room),...roomInfo(room)});
       announceRoster(room); return;
@@ -66,9 +69,9 @@ wss.on('connection', ws => {
     if (m.type === 'shot') { broadcast(room,{type:'shot',id:p.id,weapon:clean(m.weapon,24)},ws); return; }
     if (m.type === 'hit') {
       const target=room.players.get(String(m.target)); if(!target || target.id===p.id)return;
-      // GOD MODE is enforced server-side: damage never reaches an invulnerable player.
+      const now=Date.now();
+      if (target.spawnShieldUntil && now < target.spawnShieldUntil) { send(p.ws,{type:'notice',message:'Противник защищён после появления'}); return; }
       if (target.godMode) { target.hp=100; return; }
-      // Lightweight sanity check: only permit hits against players within arena range.
       const d=Math.hypot(target.x-p.x,target.z-p.z); if(d>85)return;
       const damage=Math.max(1,Math.min(100,Number(m.damage)||34)); target.hp=Math.max(0,target.hp-damage);
       let killed=false;
@@ -77,7 +80,15 @@ wss.on('connection', ws => {
       if(killed)broadcast(room,{type:'notice',message:`${p.name} выбил игрока ${target.name}`});
       return;
     }
-    if (m.type === 'respawn') { p.hp=100; p.x=(Math.random()-.5)*12; p.y=1.6; p.z=(Math.random()-.5)*12; p.yaw=0; broadcast(room,{type:'state',id:p.id,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:0,hp:p.hp}); announceRoster(room); return; }
+    if (m.type === 'respawn') {
+      const spawn=randomSpawn();
+      p.x=Number.isFinite(Number(m.x))?Math.max(-22,Math.min(22,Number(m.x))):spawn.x;
+      p.y=1.6;
+      p.z=Number.isFinite(Number(m.z))?Math.max(-28,Math.min(28,Number(m.z))):spawn.z;
+      p.hp=100; p.yaw=0; p.pitch=0; p.spawnShieldUntil=Date.now()+SPAWN_SHIELD_MS;
+      broadcast(room,{type:'state',id:p.id,x:p.x,y:p.y,z:p.z,yaw:p.yaw,pitch:0,hp:p.hp,spawnShieldMs:SPAWN_SHIELD_MS});
+      announceRoster(room); return;
+    }
   });
   ws.on('close',()=>leave(ws)); ws.on('error',()=>leave(ws));
 });
