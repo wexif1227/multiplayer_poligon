@@ -48,12 +48,42 @@ namespace Poligon.Weapons
             switch (id)
             {
                 case WeaponId.ak47:
-                    P(root.transform, PrimitiveType.Cube, new Vector3(0.02f, -0.02f, 0.25f), new Vector3(0.065f, 0.085f, 0.48f), wood);
-                    P(root.transform, PrimitiveType.Cube, new Vector3(0.02f, 0.01f, -0.02f), new Vector3(0.055f, 0.07f, 0.2f), dark);
-                    P(root.transform, PrimitiveType.Cube, new Vector3(0.02f, -0.02f, -0.2f), new Vector3(0.05f, 0.08f, 0.16f), wood);
-                    P(root.transform, PrimitiveType.Cylinder, new Vector3(0.02f, 0.01f, 0.55f), new Vector3(0.028f, 0.2f, 0.028f), steel, new Vector3(90, 0, 0));
-                    P(root.transform, PrimitiveType.Cube, new Vector3(0.02f, -0.08f, 0.08f), new Vector3(0.04f, 0.12f, 0.05f), dark);
-                    P(root.transform, PrimitiveType.Cube, new Vector3(0.02f, 0.05f, 0.15f), new Vector3(0.02f, 0.04f, 0.08f), steel);
+                    // Viewmodel convention: +Z points forward from the camera,
+                    // +Y is up. Keep the stock behind the receiver and the
+                    // barrel/handguard in front so the rifle cannot appear reversed.
+                    P(root.transform, PrimitiveType.Cube,
+                        new Vector3(0.02f, -0.015f, 0.12f),
+                        new Vector3(0.065f, 0.085f, 0.34f), dark);
+
+                    // Rear wooden stock (towards the player: -Z)
+                    P(root.transform, PrimitiveType.Cube,
+                        new Vector3(0.02f, -0.02f, -0.20f),
+                        new Vector3(0.055f, 0.075f, 0.24f), wood);
+
+                    // Wooden handguard and front gas tube
+                    P(root.transform, PrimitiveType.Cube,
+                        new Vector3(0.02f, 0.005f, 0.34f),
+                        new Vector3(0.06f, 0.065f, 0.22f), wood);
+
+                    // Barrel points along +Z
+                    P(root.transform, PrimitiveType.Cylinder,
+                        new Vector3(0.02f, 0.015f, 0.57f),
+                        new Vector3(0.018f, 0.16f, 0.018f), steel,
+                        new Vector3(90f, 0f, 0f));
+
+                    // Magazine hangs down (-Y)
+                    P(root.transform, PrimitiveType.Cube,
+                        new Vector3(0.02f, -0.105f, 0.10f),
+                        new Vector3(0.045f, 0.14f, 0.09f), dark,
+                        new Vector3(-8f, 0f, 0f));
+
+                    // Front sight and rear sight
+                    P(root.transform, PrimitiveType.Cube,
+                        new Vector3(0.02f, 0.065f, 0.43f),
+                        new Vector3(0.025f, 0.045f, 0.035f), steel);
+                    P(root.transform, PrimitiveType.Cube,
+                        new Vector3(0.02f, 0.055f, -0.005f),
+                        new Vector3(0.025f, 0.035f, 0.04f), steel);
                     break;
 
                 case WeaponId.m4a1s:
